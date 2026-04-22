@@ -1,0 +1,81 @@
+image:
+  repository: platformcrprd.azurecr.io/hermes-agent
+  tag: "0.10.0"
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  api: 2
+
+serviceAccount:
+  create: true
+  name: hermes-agent
+
+postgres:
+  # Populated via ExternalSecret — do not set here
+  urlSecretRef:
+    name: hermes-secrets
+    key: HERMES_DB_URL
+
+hermesHome:
+  storageClassName: azurefile-csi-premium
+  size: 10Gi
+
+api:
+  port: 8000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  hpa:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  ingress:
+    enabled: true
+    className: nginx
+    host: hermes-api.example.com
+    tls:
+      enabled: true
+      secretName: hermes-api-tls
+
+gateway:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+cron:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+datadog:
+  enabled: false
+  env: production
+  service: hermes-agent
+
+monitoring:
+  enabled: false
+
+externalSecrets:
+  enabled: true
+  secretStoreRef:
+    name: azure-keyvault
+    kind: SecretStore
+  remoteRefs:
+    HERMES_DB_URL: hermes-db-url
+    HERMES_API_KEY: hermes-api-key
+    ANTHROPIC_API_KEY: anthropic-api-key
+    OPENAI_API_KEY: openai-api-key

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hermes-agent
+description: Hermes AI Agent — API, gateway, and cron
+type: application
+version: 0.1.0
+appVersion: "0.10.0"
