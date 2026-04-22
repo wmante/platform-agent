@@ -79,6 +79,13 @@ termux = [
   "hermes-agent[honcho]",
   "hermes-agent[acp]",
 ]
+postgres = [
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "asyncpg>=0.29,<1",
+  "pgvector>=0.3,<1",
+  "alembic>=1.13,<2",
+  "psycopg2-binary>=2.9,<3",
+]
 dingtalk = ["dingtalk-stream>=0.20,<1", "alibabacloud-dingtalk>=2.0.0", "qrcode>=7.0,<8"]
 feishu = ["lark-oapi>=1.5.3,<2", "qrcode>=7.0,<8"]
 google = [
@@ -135,13 +142,13 @@ hermes-agent = "run_agent:main"
 hermes-acp = "acp_adapter.entry:main"
 
 [tool.setuptools]
-py-modules = ["run_agent", "model_tools", "toolsets", "batch_runner", "trajectory_compressor", "toolset_distributions", "cli", "hermes_constants", "hermes_state", "hermes_time", "hermes_logging", "rl_cli", "utils"]
+py-modules = ["run_agent", "model_tools", "toolsets", "batch_runner", "trajectory_compressor", "toolset_distributions", "cli", "hermes_constants", "hermes_time", "hermes_logging", "rl_cli", "utils"]
 
 [tool.setuptools.package-data]
 hermes_cli = ["web_dist/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["agent", "agent.*", "tools", "tools.*", "hermes_cli", "gateway", "gateway.*", "tui_gateway", "tui_gateway.*", "cron", "acp_adapter", "plugins", "plugins.*"]
+include = ["agent", "agent.*", "tools", "tools.*", "hermes_cli", "gateway", "gateway.*", "tui_gateway", "tui_gateway.*", "cron", "acp_adapter", "plugins", "plugins.*", "hermes_state", "hermes_state.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
