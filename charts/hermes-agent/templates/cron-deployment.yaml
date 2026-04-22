@@ -1,0 +1,61 @@
+{{- if .Values.cron.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hermes.fullname" . }}-cron
+  labels:
+    {{- include "hermes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cron
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: cron
+      {{- include "hermes.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: cron
+        {{- include "hermes.labels" . | nindent 8 }}
+        {{- if .Values.datadog.enabled }}
+        admission.datadoghq.com/enabled: "true"
+        {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: cron
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["hermes", "cron"]
+          envFrom:
+            - secretRef:
+                name: hermes-secrets
+          env:
+            - name: HERMES_RUN_MODE
+              value: cron
+            - name: HERMES_HOME
+              value: /hermes-home
+            {{- if .Values.datadog.enabled }}
+            - name: DD_ENV
+              value: {{ .Values.datadog.env }}
+            - name: DD_SERVICE
+              value: {{ .Values.datadog.service }}-cron
+            - name: DD_VERSION
+              value: {{ .Values.image.tag | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.cron.resources | nindent 12 }}
+          volumeMounts:
+            - name: hermes-home
+              mountPath: /hermes-home
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: hermes-home
+          persistentVolumeClaim:
+            claimName: {{ include "hermes.fullname" . }}-home
+{{- end }}
