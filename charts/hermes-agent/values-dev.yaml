@@ -1,0 +1,15 @@
+replicaCount:
+  api: 1
+
+api:
+  hpa:
+    minReplicas: 1
+    maxReplicas: 1
+  ingress:
+    enabled: false
+
+datadog:
+  enabled: false
+
+externalSecrets:
+  enabled: false

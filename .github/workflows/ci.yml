@@ -1,0 +1,84 @@
+name: CI (AKS)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-aks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: hermes
+          POSTGRES_USER: hermes
+          POSTGRES_PASSWORD: hermes
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hermes"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv --python 3.12
+          source .venv/bin/activate
+          uv pip install -e ".[dev,web,postgres]"
+          uv pip install ruff
+
+      - name: Lint
+        run: |
+          source .venv/bin/activate
+          ruff check .
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          scripts/run_tests.sh
+        env:
+          HERMES_TEST_PG_URL: postgresql+asyncpg://hermes:hermes@localhost:5432/hermes
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Build AKS image
+        run: docker build -t hermes-agent:ci -f Dockerfile.k8s .
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint chart
+        run: helm lint charts/hermes-agent/
+
+      - name: Template chart (dev values)
+        run: helm template charts/hermes-agent/ -f charts/hermes-agent/values-dev.yaml
