@@ -21,7 +21,23 @@ ui-tui/packages/hermes-ink/dist/
 # Environment files
 .env
 
+# Build artifacts
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Test and type-check cache
+tests/
+.pytest_cache/
+.mypy_cache/
+
+# Docs
+docs/
 *.md
 
 # Runtime data (bind-mounted at /opt/data; must not leak into build context)
 data/
+
+# TUI node modules
+ui-tui/node_modules/
