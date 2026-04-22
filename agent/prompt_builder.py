@@ -513,6 +513,11 @@ PLATFORM_HINTS = {
         "image and is the WRONG path. Bare Unicode emoji in text is also not a substitute "
         "— when a sticker is the right response, use yb_send_sticker."
     ),
+    "api": (
+        "You are running as a REST API agent. Respond with plain text or markdown as appropriate. "
+        "Do not use MEDIA:/path tags — those are intercepted only on messaging platforms. "
+        "When referring to a file you created or changed, state its path in plain text."
+    ),
 }
 
 # ---------------------------------------------------------------------------

@@ -314,6 +314,38 @@ TOOLSETS = {
         "includes": []
     },
 
+    "hermes-api": {
+        "description": "Hermes management REST API — full agent tools accessible via HTTP (no interactive UI tools)",
+        "tools": [
+            # Web
+            "web_search", "web_extract",
+            # Terminal + process management
+            "terminal", "process",
+            # File manipulation
+            "read_file", "write_file", "patch", "search_files",
+            # Vision + image generation
+            "vision_analyze", "image_generate",
+            # Skills
+            "skills_list", "skill_view", "skill_manage",
+            # Browser automation
+            "browser_navigate", "browser_snapshot", "browser_click",
+            "browser_type", "browser_scroll", "browser_back",
+            "browser_press", "browser_get_images",
+            "browser_vision", "browser_console", "browser_cdp",
+            # Planning & memory
+            "todo", "memory",
+            # Session history search
+            "session_search",
+            # Code execution + delegation
+            "execute_code", "delegate_task",
+            # Cronjob management
+            "cronjob",
+            # Home Assistant smart home control (gated on HASS_TOKEN via check_fn)
+            "ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service",
+        ],
+        "includes": []
+    },
+
     "hermes-api-server": {
         "description": "OpenAI-compatible API server — full agent tools accessible via HTTP (no interactive UI tools like clarify or send_message)",
         "tools": [

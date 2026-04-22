@@ -99,6 +99,7 @@ class Platform(Enum):
     EMAIL = "email"
     SMS = "sms"
     DINGTALK = "dingtalk"
+    API = "api"
     API_SERVER = "api_server"
     WEBHOOK = "webhook"
     FEISHU = "feishu"
