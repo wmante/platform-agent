@@ -28,5 +28,21 @@ services:
       timeout: 3s
       retries: 10
 
+  hermes-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HERMES_DB_URL: postgresql+asyncpg://hermes:hermes@postgres:5432/hermes
+      HERMES_API_PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - hermes-home:/root/.hermes
+
 volumes:
   pgdata:
+  hermes-home:
