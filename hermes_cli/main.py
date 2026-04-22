@@ -5103,6 +5103,124 @@ def cmd_import(args):
     run_import(args)
 
 
+def cmd_db(args):
+    """Database management (migrate-from-sqlite, …)."""
+    db_command = getattr(args, "db_command", None)
+    if db_command == "migrate-from-sqlite":
+        _cmd_db_migrate_from_sqlite(args)
+    else:
+        print(
+            "hermes db — database management\n"
+            "  migrate-from-sqlite   Copy all sessions from SQLite to Postgres"
+        )
+
+
+def _cmd_db_migrate_from_sqlite(args):
+    """Copy all sessions+messages from the local SQLite DB to HERMES_DB_URL."""
+    import os
+    from hermes_constants import get_hermes_home
+
+    pg_url = os.getenv("HERMES_DB_URL", "")
+    if not pg_url.startswith("postgresql"):
+        print(
+            "Error: HERMES_DB_URL must be set to a postgresql+asyncpg:// URL",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    sqlite_path = get_hermes_home() / "state.db"
+    if not sqlite_path.exists():
+        print(f"No SQLite database found at {sqlite_path} — nothing to migrate.")
+        return
+
+    dry_run: bool = getattr(args, "dry_run", False)
+
+    from hermes_state.sqlite_backend import SQLiteBackend
+    from hermes_state.postgres_backend import PostgresBackend
+
+    print(f"Source:      {sqlite_path}")
+    print(f"Destination: {pg_url}")
+    if dry_run:
+        print("Mode:        DRY RUN — no data will be written")
+    print()
+
+    src = SQLiteBackend(db_path=sqlite_path)
+    try:
+        sessions = src.export_all()
+    finally:
+        src.close()
+
+    if not sessions:
+        print("No sessions found in SQLite database.")
+        return
+
+    if dry_run:
+        total_msgs = sum(len(s.get("messages", [])) for s in sessions)
+        print(f"Would migrate: {len(sessions)} sessions, {total_msgs} messages")
+        return
+
+    dst = PostgresBackend(db_url=pg_url)
+    sessions_ok = 0
+    sessions_err = 0
+    messages_ok = 0
+    messages_err = 0
+
+    try:
+        for session in sessions:
+            try:
+                dst.create_session(
+                    session_id=session["id"],
+                    source=session.get("source", "unknown"),
+                    model=session.get("model"),
+                    system_prompt=session.get("system_prompt"),
+                    user_id=session.get("user_id"),
+                    parent_session_id=session.get("parent_session_id"),
+                )
+                if session.get("ended_at"):
+                    dst.end_session(session["id"], session.get("end_reason") or "migrated")
+                if session.get("title"):
+                    try:
+                        dst.set_session_title(session["id"], session["title"])
+                    except Exception:
+                        pass  # duplicate title — skip silently
+            except Exception as exc:
+                print(f"  [ERROR] session {session['id']}: {exc}", file=sys.stderr)
+                sessions_err += 1
+                continue
+
+            for msg in session.get("messages", []):
+                try:
+                    dst.append_message(
+                        session_id=session["id"],
+                        role=msg.get("role", "user"),
+                        content=msg.get("content"),
+                        tool_name=msg.get("tool_name"),
+                        tool_calls=msg.get("tool_calls"),
+                        tool_call_id=msg.get("tool_call_id"),
+                        token_count=msg.get("token_count"),
+                        finish_reason=msg.get("finish_reason"),
+                        reasoning=msg.get("reasoning"),
+                        reasoning_content=msg.get("reasoning_content"),
+                        reasoning_details=msg.get("reasoning_details"),
+                        codex_reasoning_items=msg.get("codex_reasoning_items"),
+                    )
+                    messages_ok += 1
+                except Exception as exc:
+                    print(f"    [ERROR] message in {session['id']}: {exc}", file=sys.stderr)
+                    messages_err += 1
+
+            sessions_ok += 1
+            print(f"  ✓ {session['id']} ({len(session.get('messages', []))} messages)")
+    finally:
+        dst.close()
+
+    print()
+    print(
+        f"Migration complete: {sessions_ok} sessions, {messages_ok} messages migrated"
+        + (f" ({sessions_err + messages_err} errors)" if sessions_err + messages_err else "")
+    )
+
+
 def cmd_version(args):
     """Show version."""
     print(f"Hermes Agent v{__version__} ({__release_date__})")
@@ -8972,6 +9090,32 @@ Examples:
         help="Overwrite existing files without confirmation",
     )
     import_parser.set_defaults(func=cmd_import)
+
+    # =========================================================================
+    # db command
+    # =========================================================================
+    db_parser = subparsers.add_parser(
+        "db",
+        help="Database management",
+        description="Hermes database utilities (migration, inspection)",
+    )
+    db_subparsers = db_parser.add_subparsers(dest="db_command")
+
+    db_migrate = db_subparsers.add_parser(
+        "migrate-from-sqlite",
+        help="Copy all sessions and messages from local SQLite DB to Postgres",
+        description=(
+            "Read the SQLite state database (HERMES_HOME/state.db) and write all "
+            "sessions and messages into the Postgres database specified by HERMES_DB_URL."
+        ),
+    )
+    db_migrate.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print counts without writing any data",
+    )
+    db_parser.set_defaults(func=cmd_db)
 
     # =========================================================================
     # config command

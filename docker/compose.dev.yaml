@@ -1,0 +1,32 @@
+version: "3.9"
+# Local development stack — Postgres with pgvector extension
+#
+# Usage:
+#   docker compose -f docker/compose.dev.yaml up -d
+#   export HERMES_DB_URL="postgresql+asyncpg://hermes:hermes@localhost:5432/hermes"
+#
+# Run migrations:
+#   alembic upgrade head
+#
+# Migration smoke test:
+#   hermes db migrate-from-sqlite --dry-run
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: hermes
+      POSTGRES_USER: hermes
+      POSTGRES_PASSWORD: hermes
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

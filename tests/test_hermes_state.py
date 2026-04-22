@@ -1,19 +1,57 @@
-"""Tests for hermes_state.py — SessionDB SQLite CRUD, FTS5 search, export."""
+"""Tests for hermes_state — SessionDB CRUD, FTS search, export.
 
+Runs against both SQLiteBackend (always) and PostgresBackend (when
+HERMES_TEST_PG_URL is set, e.g. postgresql+asyncpg://hermes:hermes@localhost/hermes).
+SQL-internals tests (WAL mode, schema_version, etc.) are SQLite-only.
+"""
+
+import os
 import time
 import pytest
 from pathlib import Path
 
-from hermes_state import SessionDB
+from hermes_state import SessionDB, SQLiteBackend
+
+PG_URL = os.getenv("HERMES_TEST_PG_URL")
+
+# Marker for tests that access SQLite internals directly (db._conn)
+sqlite_only = pytest.mark.skipif(
+    False,  # evaluated per-test via the fixture parametrize id
+    reason="SQLite-only test",
+)
 
 
-@pytest.fixture()
-def db(tmp_path):
-    """Create a SessionDB with a temp database file."""
-    db_path = tmp_path / "test_state.db"
-    session_db = SessionDB(db_path=db_path)
-    yield session_db
-    session_db.close()
+@pytest.fixture(
+    params=[
+        "sqlite",
+        pytest.param(
+            "postgres",
+            marks=pytest.mark.skipif(
+                not PG_URL, reason="HERMES_TEST_PG_URL not set"
+            ),
+        ),
+    ]
+)
+def db(tmp_path, request):
+    """Backend fixture — sqlite always, postgres when HERMES_TEST_PG_URL is set."""
+    if request.param == "sqlite":
+        db_path = tmp_path / "test_state.db"
+        backend = SQLiteBackend(db_path=db_path)
+        yield backend
+        backend.close()
+    else:
+        from hermes_state.postgres_backend import PostgresBackend
+        import uuid
+
+        backend = PostgresBackend(db_url=PG_URL)
+        yield backend
+        # Cleanup: remove all sessions created during the test
+        try:
+            for s in backend.search_sessions(limit=10_000):
+                backend.delete_session(s["id"])
+        except Exception:
+            pass
+        backend.close()
 
 
 # =========================================================================
@@ -679,8 +717,7 @@ class TestFTS5Search:
 
     def test_sanitize_fts5_query_strips_dangerous_chars(self):
         """Unit test for _sanitize_fts5_query static method."""
-        from hermes_state import SessionDB
-        s = SessionDB._sanitize_fts5_query
+        s = SQLiteBackend._sanitize_fts5_query
         assert s('hello world') == 'hello world'
         assert '+' not in s('C++')
         assert '"' not in s('"unterminated')
@@ -696,8 +733,7 @@ class TestFTS5Search:
 
     def test_sanitize_fts5_preserves_quoted_phrases(self):
         """Properly paired double-quoted phrases should be preserved."""
-        from hermes_state import SessionDB
-        s = SessionDB._sanitize_fts5_query
+        s = SQLiteBackend._sanitize_fts5_query
         # Simple quoted phrase
         assert s('"exact phrase"') == '"exact phrase"'
         # Quoted phrase alongside unquoted terms
@@ -711,8 +747,7 @@ class TestFTS5Search:
 
     def test_sanitize_fts5_quotes_hyphenated_terms(self):
         """Hyphenated terms should be wrapped in quotes for exact matching."""
-        from hermes_state import SessionDB
-        s = SessionDB._sanitize_fts5_query
+        s = SQLiteBackend._sanitize_fts5_query
         # Simple hyphenated term
         assert s('chat-send') == '"chat-send"'
         # Multiple hyphens
@@ -733,8 +768,7 @@ class TestFTS5Search:
 
     def test_sanitize_fts5_quotes_dotted_terms(self):
         """Dotted terms should be wrapped in quotes to avoid FTS5 query parse edge cases."""
-        from hermes_state import SessionDB
-        s = SessionDB._sanitize_fts5_query
+        s = SQLiteBackend._sanitize_fts5_query
 
         assert s('P2.2') == '"P2.2"'
         assert s('simulate.p2') == '"simulate.p2"'
@@ -792,8 +826,7 @@ class TestCJKSearchFallback:
     """
 
     def test_cjk_detection_covers_all_ranges(self):
-        from hermes_state import SessionDB
-        f = SessionDB._contains_cjk
+        f = SQLiteBackend._contains_cjk
         # Chinese (CJK Unified Ideographs)
         assert f("记忆断裂") is True
         # Japanese Hiragana + Katakana
@@ -1092,16 +1125,21 @@ class TestDeleteAndExport:
 # =========================================================================
 
 class TestPruneSessions:
+    """Prune tests that backdate started_at — SQLite only (direct _conn access)."""
+
+    def _backdate(self, db, session_id, ts):
+        if not hasattr(db, "_conn"):
+            pytest.skip("Prune backdating requires SQLite direct access")
+        db._conn.execute(
+            "UPDATE sessions SET started_at = ? WHERE id = ?", (ts, session_id)
+        )
+        db._conn.commit()
+
     def test_prune_old_ended_sessions(self, db):
         # Create and end an "old" session
         db.create_session(session_id="old", source="cli")
         db.end_session("old", end_reason="done")
-        # Manually backdate started_at
-        db._conn.execute(
-            "UPDATE sessions SET started_at = ? WHERE id = ?",
-            (time.time() - 100 * 86400, "old"),
-        )
-        db._conn.commit()
+        self._backdate(db, "old", time.time() - 100 * 86400)
 
         # Create a recent session
         db.create_session(session_id="new", source="cli")
@@ -1115,12 +1153,7 @@ class TestPruneSessions:
 
     def test_prune_skips_active_sessions(self, db):
         db.create_session(session_id="active", source="cli")
-        # Backdate but don't end
-        db._conn.execute(
-            "UPDATE sessions SET started_at = ? WHERE id = ?",
-            (time.time() - 200 * 86400, "active"),
-        )
-        db._conn.commit()
+        self._backdate(db, "active", time.time() - 200 * 86400)
 
         pruned = db.prune_sessions(older_than_days=90)
         assert pruned == 0
@@ -1130,11 +1163,7 @@ class TestPruneSessions:
         for sid, src in [("old_cli", "cli"), ("old_tg", "telegram")]:
             db.create_session(session_id=sid, source=src)
             db.end_session(sid, end_reason="done")
-            db._conn.execute(
-                "UPDATE sessions SET started_at = ? WHERE id = ?",
-                (time.time() - 200 * 86400, sid),
-            )
-        db._conn.commit()
+            self._backdate(db, sid, time.time() - 200 * 86400)
 
         pruned = db.prune_sessions(older_than_days=90, source="cli")
         assert pruned == 1
@@ -1156,7 +1185,8 @@ class TestPruneSessions:
         db.create_session(session_id="D", source="cli", parent_session_id="C")
         db.end_session("D", end_reason="done")
 
-        # Backdate A and B to be old; C and D stay recent
+        if not hasattr(db, "_conn"):
+            pytest.skip("Prune backdating requires SQLite direct access")
         for sid, ts in [("A", old_ts), ("B", old_ts), ("C", recent_ts), ("D", recent_ts)]:
             db._conn.execute(
                 "UPDATE sessions SET started_at = ? WHERE id = ?", (ts, sid)
@@ -1187,6 +1217,8 @@ class TestPruneSessions:
         db.create_session(session_id="Z", source="cli", parent_session_id="Y")
         db.end_session("Z", end_reason="done")
 
+        if not hasattr(db, "_conn"):
+            pytest.skip("Prune backdating requires SQLite direct access")
         for sid in ("X", "Y", "Z"):
             db._conn.execute(
                 "UPDATE sessions SET started_at = ? WHERE id = ?", (old_ts, sid)
@@ -1309,74 +1341,74 @@ class TestSessionTitle:
 
 
 class TestSanitizeTitle:
-    """Tests for SessionDB.sanitize_title() validation and cleaning."""
+    """Tests for SQLiteBackend.sanitize_title() validation and cleaning."""
 
     def test_normal_title_unchanged(self):
-        assert SessionDB.sanitize_title("My Project") == "My Project"
+        assert SQLiteBackend.sanitize_title("My Project") == "My Project"
 
     def test_strips_whitespace(self):
-        assert SessionDB.sanitize_title("  hello world  ") == "hello world"
+        assert SQLiteBackend.sanitize_title("  hello world  ") == "hello world"
 
     def test_collapses_internal_whitespace(self):
-        assert SessionDB.sanitize_title("hello   world") == "hello world"
+        assert SQLiteBackend.sanitize_title("hello   world") == "hello world"
 
     def test_tabs_and_newlines_collapsed(self):
-        assert SessionDB.sanitize_title("hello\t\nworld") == "hello world"
+        assert SQLiteBackend.sanitize_title("hello\t\nworld") == "hello world"
 
     def test_none_returns_none(self):
-        assert SessionDB.sanitize_title(None) is None
+        assert SQLiteBackend.sanitize_title(None) is None
 
     def test_empty_string_returns_none(self):
-        assert SessionDB.sanitize_title("") is None
+        assert SQLiteBackend.sanitize_title("") is None
 
     def test_whitespace_only_returns_none(self):
-        assert SessionDB.sanitize_title("   \t\n  ") is None
+        assert SQLiteBackend.sanitize_title("   \t\n  ") is None
 
     def test_control_chars_stripped(self):
         # Null byte, bell, backspace, etc.
-        assert SessionDB.sanitize_title("hello\x00world") == "helloworld"
-        assert SessionDB.sanitize_title("\x07\x08test\x1b") == "test"
+        assert SQLiteBackend.sanitize_title("hello\x00world") == "helloworld"
+        assert SQLiteBackend.sanitize_title("\x07\x08test\x1b") == "test"
 
     def test_del_char_stripped(self):
-        assert SessionDB.sanitize_title("hello\x7fworld") == "helloworld"
+        assert SQLiteBackend.sanitize_title("hello\x7fworld") == "helloworld"
 
     def test_zero_width_chars_stripped(self):
         # Zero-width space (U+200B), zero-width joiner (U+200D)
-        assert SessionDB.sanitize_title("hello\u200bworld") == "helloworld"
-        assert SessionDB.sanitize_title("hello\u200dworld") == "helloworld"
+        assert SQLiteBackend.sanitize_title("hello\u200bworld") == "helloworld"
+        assert SQLiteBackend.sanitize_title("hello\u200dworld") == "helloworld"
 
     def test_rtl_override_stripped(self):
         # Right-to-left override (U+202E) — used in filename spoofing attacks
-        assert SessionDB.sanitize_title("hello\u202eworld") == "helloworld"
+        assert SQLiteBackend.sanitize_title("hello\u202eworld") == "helloworld"
 
     def test_bom_stripped(self):
         # Byte order mark (U+FEFF)
-        assert SessionDB.sanitize_title("\ufeffhello") == "hello"
+        assert SQLiteBackend.sanitize_title("\ufeffhello") == "hello"
 
     def test_only_control_chars_returns_none(self):
-        assert SessionDB.sanitize_title("\x00\x01\x02\u200b\ufeff") is None
+        assert SQLiteBackend.sanitize_title("\x00\x01\x02\u200b\ufeff") is None
 
     def test_max_length_allowed(self):
         title = "A" * 100
-        assert SessionDB.sanitize_title(title) == title
+        assert SQLiteBackend.sanitize_title(title) == title
 
     def test_exceeds_max_length_raises(self):
         title = "A" * 101
         with pytest.raises(ValueError, match="too long"):
-            SessionDB.sanitize_title(title)
+            SQLiteBackend.sanitize_title(title)
 
     def test_unicode_emoji_allowed(self):
-        assert SessionDB.sanitize_title("🚀 My Project 🎉") == "🚀 My Project 🎉"
+        assert SQLiteBackend.sanitize_title("🚀 My Project 🎉") == "🚀 My Project 🎉"
 
     def test_cjk_characters_allowed(self):
-        assert SessionDB.sanitize_title("我的项目") == "我的项目"
+        assert SQLiteBackend.sanitize_title("我的项目") == "我的项目"
 
     def test_accented_characters_allowed(self):
-        assert SessionDB.sanitize_title("Résumé éditing") == "Résumé éditing"
+        assert SQLiteBackend.sanitize_title("Résumé éditing") == "Résumé éditing"
 
     def test_special_punctuation_allowed(self):
         title = "PR #438 — fixing the 'auth' middleware"
-        assert SessionDB.sanitize_title(title) == title
+        assert SQLiteBackend.sanitize_title(title) == title
 
     def test_sanitize_applied_in_set_session_title(self, db):
         """set_session_title applies sanitize_title internally."""
@@ -1392,16 +1424,24 @@ class TestSanitizeTitle:
 
 
 class TestSchemaInit:
+    """SQLite-internal schema checks."""
+
     def test_wal_mode(self, db):
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         cursor = db._conn.execute("PRAGMA journal_mode")
         mode = cursor.fetchone()[0]
         assert mode == "wal"
 
     def test_foreign_keys_enabled(self, db):
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         cursor = db._conn.execute("PRAGMA foreign_keys")
         assert cursor.fetchone()[0] == 1
 
     def test_tables_exist(self, db):
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         cursor = db._conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         )
@@ -1411,12 +1451,16 @@ class TestSchemaInit:
         assert "schema_version" in tables
 
     def test_schema_version(self, db):
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         cursor = db._conn.execute("SELECT version FROM schema_version")
         version = cursor.fetchone()[0]
         assert version == 11
 
     def test_title_column_exists(self, db):
         """Verify the title column was created in the sessions table."""
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         cursor = db._conn.execute("PRAGMA table_info(sessions)")
         columns = {row[1] for row in cursor.fetchall()}
         assert "title" in columns
@@ -1469,8 +1513,8 @@ class TestSchemaInit:
         conn.commit()
         conn.close()
 
-        # Open with SessionDB — should migrate to v9
-        migrated_db = SessionDB(db_path=db_path)
+        # Open with SQLiteBackend — should migrate to v7
+        migrated_db = SQLiteBackend(db_path=db_path)
 
         # Verify migration
         cursor = migrated_db._conn.execute("SELECT version FROM schema_version")
