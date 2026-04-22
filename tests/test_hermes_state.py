@@ -2337,12 +2337,13 @@ class TestConcurrentWriteSafety:
 
     def test_sqlite_timeout_is_at_least_30s(self, db):
         """Connection timeout should be >= 30s to survive CLI/gateway contention."""
+        if not hasattr(db, "_conn"):
+            pytest.skip("SQLite-only test")
         # Access the underlying connection timeout via sqlite3 introspection.
         # There is no public API, so we check the kwarg via the module default.
-        import sqlite3
         import inspect
-        from hermes_state import SessionDB as _SessionDB
-        src = inspect.getsource(_SessionDB.__init__)
+        from hermes_state.sqlite_backend import SQLiteBackend
+        src = inspect.getsource(SQLiteBackend.__init__)
         assert "30" in src, (
             "SQLite timeout should be at least 30s to handle CLI/gateway lock contention"
         )
