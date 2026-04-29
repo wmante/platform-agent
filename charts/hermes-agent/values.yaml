@@ -66,6 +66,12 @@ datadog:
   env: production
   service: hermes-agent
 
+pdb:
+  minAvailable: 1
+
+networkPolicy:
+  ingressNamespace: ingress-nginx
+
 monitoring:
   enabled: false
 

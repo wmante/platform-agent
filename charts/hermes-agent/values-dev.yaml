@@ -13,3 +13,9 @@ datadog:
 
 externalSecrets:
   enabled: false
+
+pdb:
+  minAvailable: 0
+
+networkPolicy:
+  ingressNamespace: prd
