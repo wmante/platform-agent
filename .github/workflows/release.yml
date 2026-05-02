@@ -36,5 +36,5 @@ jobs:
 
       - name: Package and push Helm chart
         run: |
-          helm package charts/hermes-agent/
-          helm push hermes-agent-*.tgz oci://${{ secrets.ACR_NAME }}.azurecr.io/helm
+          helm package charts/platform-agent/
+          helm push platform-agent-*.tgz oci://${{ secrets.ACR_NAME }}.azurecr.io/helm

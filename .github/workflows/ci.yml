@@ -78,7 +78,7 @@ jobs:
       - uses: azure/setup-helm@v4
 
       - name: Lint chart
-        run: helm lint charts/hermes-agent/
+        run: helm lint charts/platform-agent/
 
       - name: Template chart (dev values)
-        run: helm template charts/hermes-agent/ -f charts/hermes-agent/values-dev.yaml
+        run: helm template charts/platform-agent/ -f charts/platform-agent/values-dev.yaml

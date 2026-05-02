@@ -1,5 +1,5 @@
 apiVersion: v2
-name: hermes-agent
+name: platform-agent
 description: Hermes AI Agent — API, gateway, and cron
 type: application
 version: 0.1.0

@@ -90,11 +90,11 @@ docker run --rm -e HERMES_DB_URL=sqlite:/// hermes-agent:local python -c "import
 
 ---
 
-### Step 2 — `charts/hermes-agent/Chart.yaml`
+### Step 2 — `charts/platform-agent/Chart.yaml`
 
 ```yaml
 apiVersion: v2
-name: hermes-agent
+name: platform-agent
 description: Hermes AI Agent — API, gateway, and cron
 type: application
 version: 0.1.0
@@ -103,7 +103,7 @@ appVersion: "0.10.0"
 
 ---
 
-### Step 3 — `charts/hermes-agent/values.yaml`
+### Step 3 — `charts/platform-agent/values.yaml`
 
 ```yaml
 image:
@@ -116,7 +116,7 @@ replicaCount:
 
 serviceAccount:
   create: true
-  name: hermes-agent
+  name: platform-agent
 
 postgres:
   # Populated via ExternalSecret — do not set here
@@ -182,7 +182,7 @@ externalSecrets:
 
 ---
 
-### Step 4 — `charts/hermes-agent/templates/_helpers.tpl`
+### Step 4 — `charts/platform-agent/templates/_helpers.tpl`
 
 ```
 {{- define "hermes.fullname" -}}
@@ -484,8 +484,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - run: helm lint charts/hermes-agent/
-      - run: helm template charts/hermes-agent/ -f charts/hermes-agent/values-dev.yaml
+      - run: helm lint charts/platform-agent/
+      - run: helm template charts/platform-agent/ -f charts/platform-agent/values-dev.yaml
 ```
 
 ---
@@ -515,8 +515,8 @@ jobs:
       - uses: azure/setup-helm@v4
       - name: Package and push chart
         run: |
-          helm package charts/hermes-agent/
-          helm push hermes-agent-*.tgz oci://${{ secrets.ACR_NAME }}.azurecr.io/helm
+          helm package charts/platform-agent/
+          helm push platform-agent-*.tgz oci://${{ secrets.ACR_NAME }}.azurecr.io/helm
 ```
 
 **Required GitHub secrets:** `AZURE_CREDENTIALS`, `ACR_NAME`
@@ -529,8 +529,8 @@ jobs:
 
 ```bash
 # Lint and template
-helm lint charts/hermes-agent/
-helm template charts/hermes-agent/ -f charts/hermes-agent/values-dev.yaml > /dev/null
+helm lint charts/platform-agent/
+helm template charts/platform-agent/ -f charts/platform-agent/values-dev.yaml > /dev/null
 
 # Local Docker build
 docker build -t hermes-agent:local .
@@ -545,14 +545,14 @@ scripts/run_tests.sh
 
 ```bash
 # First install
-helm upgrade --install hermes-agent charts/hermes-agent/ \
-  -f charts/hermes-agent/values-dev.yaml \
+helm upgrade --install platform-agent charts/platform-agent/ \
+  -f charts/platform-agent/values-dev.yaml \
   --namespace hermes --create-namespace \
   --set image.tag=<version>
 
 # Upgrade
-helm upgrade hermes-agent charts/hermes-agent/ \
-  -f charts/hermes-agent/values-prod.yaml \
+helm upgrade platform-agent charts/platform-agent/ \
+  -f charts/platform-agent/values-prod.yaml \
   --set image.tag=<new-version>
 ```
 
@@ -561,7 +561,7 @@ helm upgrade hermes-agent charts/hermes-agent/ \
 ## Commit checklist
 
 1. `Dockerfile` (multi-stage) + `.dockerignore`
-2. `charts/hermes-agent/Chart.yaml` + `values.yaml`
+2. `charts/platform-agent/Chart.yaml` + `values.yaml`
 3. `_helpers.tpl` + `pvc-hermes-home.yaml`
 4. `secret-external.yaml`
 5. `migration-job.yaml`
