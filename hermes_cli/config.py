@@ -1479,6 +1479,22 @@ OPTIONAL_ENV_VARS = {
         "category": "provider",
         "advanced": True,
     },
+    "FIREWORKS_API_KEY": {
+        "description": "Fireworks AI API key (Kimi K2 and open models)",
+        "prompt": "Fireworks AI API key",
+        "url": "https://fireworks.ai/api-keys",
+        "password": True,
+        "category": "provider",
+        "advanced": True,
+    },
+    "FIREWORKS_BASE_URL": {
+        "description": "Fireworks AI base URL override",
+        "prompt": "Fireworks AI base URL (leave empty for default)",
+        "url": None,
+        "password": False,
+        "category": "provider",
+        "advanced": True,
+    },
     "ARCEEAI_API_KEY": {
         "description": "Arcee AI API key",
         "prompt": "Arcee AI API key",

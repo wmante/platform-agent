@@ -414,6 +414,14 @@ PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
         api_key_env_vars=("AZURE_FOUNDRY_API_KEY",),
         base_url_env_var="AZURE_FOUNDRY_BASE_URL",
     ),
+    "fireworks": ProviderConfig(
+        id="fireworks",
+        name="Fireworks AI",
+        auth_type="api_key",
+        inference_base_url="https://api.fireworks.ai/inference/v1",
+        api_key_env_vars=("FIREWORKS_API_KEY",),
+        base_url_env_var="FIREWORKS_BASE_URL",
+    ),
 }
 
 
@@ -1190,7 +1198,9 @@ def resolve_provider(
         "go": "opencode-go", "opencode-go-sub": "opencode-go",
         "kilo": "kilocode", "kilo-code": "kilocode", "kilo-gateway": "kilocode",
         "lmstudio": "lmstudio", "lm-studio": "lmstudio", "lm_studio": "lmstudio",
+        "fireworks-ai": "fireworks",
         # Local server aliases — route through the generic custom provider
+        "lmstudio": "custom",
         "ollama": "custom", "ollama_cloud": "ollama-cloud",
         "vllm": "custom", "llamacpp": "custom",
         "llama.cpp": "custom", "llama-cpp": "custom",

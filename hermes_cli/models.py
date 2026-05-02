@@ -424,6 +424,9 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "moonshotai/Kimi-K2-Thinking",
         "moonshotai/Kimi-K2.6",
     ],
+    "fireworks": [
+        "accounts/fireworks/models/kimi-k2-instruct",
+    ],
     # AWS Bedrock — static fallback list used when dynamic discovery is
     # unavailable (no boto3, no credentials, or API error).  The agent
     # prefers live discovery via ListFoundationModels + ListInferenceProfiles.
@@ -804,6 +807,7 @@ CANONICAL_PROVIDERS: list[ProviderEntry] = [
     ProviderEntry("bedrock",        "AWS Bedrock",              "AWS Bedrock (Claude, Nova, Llama, DeepSeek — IAM or API key)"),
     ProviderEntry("azure-foundry",  "Azure Foundry",            "Azure Foundry (OpenAI-style or Anthropic-style endpoint — your Azure AI deployment)"),
     ProviderEntry("ai-gateway",     "Vercel AI Gateway",        "Vercel AI Gateway"),
+    ProviderEntry("fireworks",      "Fireworks AI",             "Fireworks AI (Kimi K2 and open models — direct API)"),
 ]
 
 # Derived dicts — used throughout the codebase
@@ -873,6 +877,7 @@ _PROVIDER_ALIASES = {
     "aws-bedrock": "bedrock",
     "amazon-bedrock": "bedrock",
     "amazon": "bedrock",
+    "fireworks-ai": "fireworks",
     "grok": "xai",
     "x-ai": "xai",
     "x.ai": "xai",

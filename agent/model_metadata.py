@@ -53,6 +53,7 @@ _PROVIDER_PREFIXES: frozenset[str] = frozenset({
     "arcee",
     "gmi",
     "tencent-tokenhub",
+    "fireworks",
     "custom", "local",
     # Common aliases
     "google", "google-gemini", "google-ai-studio",
@@ -208,6 +209,8 @@ DEFAULT_CONTEXT_LENGTHS = {
     "grok-3": 131072,           # grok-3, grok-3-mini, grok-3-fast, grok-3-mini-fast
     "grok-2": 131072,           # grok-2, grok-2-1212, grok-2-latest
     "grok": 131072,             # catch-all (grok-beta, unknown grok-*)
+    # Fireworks-hosted Kimi K2 — conservative 128K window
+    "accounts/fireworks/models/kimi-k2-instruct": 131072,
     # Kimi
     "kimi": 262144,
     # Tencent — Hy3 Preview (Hunyuan) with 256K context window
